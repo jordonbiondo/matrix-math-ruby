@@ -8,7 +8,7 @@ module Lib
       unless rows.length > 0 and rows.all? {|row| row.length === rows[0].length}
         raise 'Invalid matrix, rows must be the same size'
       end
-      @data = rows
+      @data = rows.map{|row| row.map {|n| n.to_f}}
     end
 
     def self.zero(width, height)
@@ -105,7 +105,7 @@ module Lib
           ri = r
           while output[ri][lead] == 0
             ri += 1
-            if rows == i
+            if rows == ri
               ri = r
               lead += 1
               throw :done  if cols == lead
@@ -132,13 +132,11 @@ module Lib
       Matrix.new self.data.map {|row| [*row, 0]}
     end
 
-    ## TODO
-    def is_row_equivalent(other)
+    def row_equivalent?(other)
       return false unless self.size == other.size
       self.rref.equals(other.rref)
     end
 
-    ## TODO
     def invertible?
       return false unless self.square?
       self.rref.equals(Matrix.identity self.height)
@@ -149,15 +147,62 @@ module Lib
       Matrix.new self.data.map.with_index { |row, i| [*row, *other.data[i]] }
     end
 
-    ## TODO
+    def determinant
+      return nil unless self.square?
+
+      return nil if self.height < 1
+
+      return self.data[0][0] if self.height == 1
+
+      return self.data[0][0] * self.data[1][1] - self.data[1][0] * self.data[0][1] if self.height == 2
+
+      copy = self.copy
+      next_sub = nil
+      det = 0
+      for y in 0..(copy.height - 1)
+        next_sub = Matrix.zero(copy.height - 1, copy.height - 1)
+        for i in 1..(copy.height - 1)
+          j2 = 0
+          for j in 0..(copy.height - 1)
+            next if j == y
+            next_sub.data[i - 1][j2] = copy.data[i][j]
+            j2 = j2 + 1
+          end
+        end
+
+        switch = ((2.0 + y) % 2.0 == 1.0) ? -1.0 : 1.0
+        det = det + (switch * copy.data[0][y] * next_sub.determinant)
+      end
+      det
+    end
+
     def inverse
       return nil unless self.invertible?
       size = self.height
-      Matrix.new self.concat_horizontal(Matrix.identity self.height).rref.data.map { |row|
-        row[size..-1]
-      }
+      comp = self.copy
+      ident = Matrix.identity(self.height)
+      result = comp.concat_horizontal(ident)
+      Matrix.new result.rref.data.map { |row| row[size..-1]}
     end
 
-  end
+    def number_of_solutions
+      reduced = self.rref
+      return 0 if reduced.data.find {|row| reduced._no_solution_row? row}
+      return Float::INFINITY if reduced.data.select{|row| reduced._zero_row? row}.length > (self.height - (self.width - 1))
+      return 1
+    end
 
-end
+    def linearly_independent?
+      return [nil, 'R_MISMATCH'] if self.width > self.height
+      reduced = self.rref
+
+      if reduced.square?
+        return [1, nil] if reduced.equals Matrix.identity(reduced.height)
+        return [nil, 'DUPLICATE_VECTORS'];
+      end
+
+      return [nil, 'DUPLICATE_VECTORS'] if reduced.data.select{|row| reduced._zero_row? row}.length > (reduced.height - self.width)
+      return [1, nil];
+    end
+  end # Class Matrix
+end # Module Lib
